@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>極簡待辦 TaskFlow - 日期強化版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0284c7',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        /* 自訂勾選框 checkbox 動畫與效果 */
+        .task-checkbox:checked + .checkbox-custom {
+            background-color: #10b981;
+            border-color: #10b981;
+        }
+        .task-checkbox:checked + .checkbox-custom i {
+            opacity: 1;
+            transform: scale(1);
+        }
+        .completed-text {
+            text-decoration: line-through;
+            opacity: 0.6;
+        }
+        /* 流暢轉場效果 */
+        .transition-all-custom {
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-screen pb-12 transition-colors duration-300">
+
+    <header class="sticky top-0 z-30 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 shadow-sm">
+        <div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30">
+                    <i class="fa-solid fa-calendar-check text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 to-violet-400 bg-clip-text text-transparent">極簡待辦 TaskFlow</h1>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">高效管理您的每日事項與時間日程</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-2">
+                <!-- 深色模式切換鍵 -->
+                <button id="themeToggleBtn" onclick="toggleDarkMode()" class="p-2.5 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 focus:outline-none transition-colors" title="切換主題">
+                    <i id="themeIcon" class="fa-solid fa-moon text-lg"></i>
+                </button>
+                <!-- 新增任務主要按鈕 -->
+                <button onclick="openModal()" class="flex items-center space-x-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-medium shadow-md shadow-indigo-500/20 active:scale-95 transition-all">
+                    <i class="fa-solid fa-plus"></i>
+                    <span class="hidden sm:inline">新增待辦</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto px-4 pt-6">
+        
+        <!-- 統計與進度條 -->
+        <section class="bg-white dark:bg-slate-800 rounded-2xl p-5 mb-6 border border-slate-100 dark:border-slate-700 shadow-sm">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-3">
+                <div>
+                    <h2 class="text-base font-semibold">今日進度</h2>
+                    <p id="statsSubtitle" class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">載入中...</p>
+                </div>
+                <div class="flex items-center space-x-4 text-sm">
+                    <div class="flex items-center space-x-1.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+                        <span class="text-slate-500 dark:text-slate-400">總計: <strong id="totalCount" class="text-slate-800 dark:text-slate-200">0</strong></span>
+                    </div>
+                    <div class="flex items-center space-x-1.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                        <span class="text-slate-500 dark:text-slate-400">已完成: <strong id="completedCount" class="text-emerald-600 dark:text-emerald-400">0</strong></span>
+                    </div>
+                </div>
+            </div>
+            <!-- 進度條 -->
+            <div class="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
+                <div id="progressBar" class="bg-gradient-to-r from-indigo-500 to-emerald-500 h-2.5 rounded-full transition-all duration-500 w-0"></div>
+            </div>
+        </section>
+
+        <section class="space-y-3 mb-6">
+            <div class="flex flex-col md:flex-row gap-3">
+                <!-- 搜尋框 -->
+                <div class="relative flex-1">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                    <input type="text" id="searchInput" oninput="renderTasks()" placeholder="搜尋待辦事項標題或內文..." 
+                           class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm placeholder-slate-400 transition-all">
+                </div>
+
+                <!-- 狀態篩選頁籤 -->
+                <div class="flex rounded-xl bg-slate-200/70 dark:bg-slate-800 p-1 border border-slate-200/50 dark:border-slate-700 self-start md:self-auto w-full md:w-auto">
+                    <button onclick="setFilter('all')" id="filter-all" class="filter-tab flex-1 md:flex-none px-4 py-1.5 rounded-lg text-xs font-medium transition-all text-slate-700 dark:text-slate-300">全部</button>
+                    <button onclick="setFilter('active')" id="filter-active" class="filter-tab flex-1 md:flex-none px-4 py-1.5 rounded-lg text-xs font-medium transition-all text-slate-500 dark:text-slate-400">進行中</button>
+                    <button onclick="setFilter('completed')" id="filter-completed" class="filter-tab flex-1 md:flex-none px-4 py-1.5 rounded-lg text-xs font-medium transition-all text-slate-500 dark:text-slate-400">已完成</button>
+                </div>
+            </div>
+
+            <!-- 次要篩選（日期狀態、優先級、分類標籤、排序） -->
+            <div class="flex flex-wrap gap-2 items-center text-xs">
+                <!-- 日期狀態篩選 -->
+                <select id="dateStatusFilter" onchange="renderTasks()" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-600 dark:text-slate-300">
+                    <option value="all">📅 所有日期狀態</option>
+                    <option value="today">☀️ 今天到期</option>
+                    <option value="upcoming">⏳ 即將到期 (3天內)</option>
+                    <option value="overdue">🚨 已逾期</option>
+                    <option value="none">⚪ 無截止日期</option>
+                </select>
+
+                <!-- 優先級篩選 -->
+                <select id="priorityFilter" onchange="renderTasks()" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-600 dark:text-slate-300">
+                    <option value="all">所有優先級</option>
+                    <option value="high">高優先級</option>
+                    <option value="medium">中優先級</option>
+                    <option value="low">低優先級</option>
+                </select>
+
+                <!-- 分類篩選 -->
+                <select id="categoryFilter" onchange="renderTasks()" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-600 dark:text-slate-300">
+                    <option value="all">所有分類</option>
+                    <option value="工作">工作</option>
+                    <option value="個人">個人</option>
+                    <option value="購物">購物</option>
+                    <option value="學習">學習</option>
+                    <option value="其他">其他</option>
+                </select>
+
+                <!-- 排序方式 (包含日期排序) -->
+                <select id="sortBy" onchange="renderTasks()" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-600 dark:text-slate-300 ml-auto">
+                    <option value="createdAt-desc">建立時間：由新到舊</option>
+                    <option value="createdAt-asc">建立時間：由舊到新</option>
+                    <option value="dueDate-asc">截止日期：最早到最晚</option>
+                    <option value="dueDate-desc">截止日期：最晚到最早</option>
+                    <option value="priority-desc">優先級：由高到低</option>
+                </select>
+            </div>
+        </section>
+
+        <!-- 任務列表容器 -->
+        <section id="taskList" class="space-y-3">
+            <!-- 任務項目將動態渲染於此 -->
+        </section>
+
+        <!-- 無資料提示 -->
+        <div id="emptyState" class="hidden flex-col items-center justify-center py-16 text-center">
+            <div class="w-20 h-20 bg-indigo-50 dark:bg-slate-800 rounded-full flex items-center justify-center text-indigo-500 mb-4">
+                <i class="fa-regular fa-folder-open text-3xl"></i>
+            </div>
+            <h3 class="text-base font-medium text-slate-700 dark:text-slate-300">沒有找到相關事項</h3>
+            <p class="text-xs text-slate-400 mt-1 max-w-xs">您可以嘗試調整篩選條件，或點擊右上角新增全新的待辦任務！</p>
+        </div>
+    </main>
+
+    <div id="taskModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200 px-4">
+        <div class="bg-white dark:bg-slate-800 w-full max-w-lg rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-700 overflow-hidden transform scale-95 transition-transform duration-200" id="modalContainer">
+            <!-- Modal 標頭 -->
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700">
+                <h3 id="modalTitle" class="text-lg font-bold text-slate-800 dark:text-slate-100">新增待辦事項</h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Modal 表單內容 -->
+            <form id="taskForm" onsubmit="handleFormSubmit(event)" class="p-6 space-y-4">
+                <input type="hidden" id="taskId">
+                
+                <!-- 任務標題 -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">任務名稱 <span class="text-red-500">*</span></label>
+                    <input type="text" id="taskTitle" required placeholder="例如：開會準備簡報、買牛奶..." 
+                           class="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+                </div>
+
+                <!-- 任務描述 -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">詳細說明 (選填)</label>
+                    <textarea id="taskDesc" rows="2" placeholder="添加補充說明或備忘資訊..." 
+                              class="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm resize-none"></textarea>
+                </div>
+
+                <!-- 優先級與分類 (雙欄) -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">優先等級</label>
+                        <select id="taskPriority" class="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+                            <option value="low">🟢 低 (Low)</option>
+                            <option value="medium" selected>🟡 中 (Medium)</option>
+                            <option value="high">🔴 高 (High)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">任務分類</label>
+                        <select id="taskCategory" class="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+                            <option value="工作">💼 工作</option>
+                            <option value="個人" selected>🏠 個人</option>
+                            <option value="購物">🛒 購物</option>
+                            <option value="學習">📚 學習</option>
+                            <option value="其他">📌 其他</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 截止日期與時間 (分離設計) -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">截止日期 (選填)</label>
+                        <input type="date" id="taskDueDate" 
+                               class="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">截止時間 (選填)</label>
+                        <input type="time" id="taskDueTime" 
+                               class="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+                    </div>
+                </div>
+
+                <!-- Modal 底部按鈕區 -->
+                <div class="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100 dark:border-slate-700">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">取消</button>
+                    <button type="submit" class="px-5 py-2 rounded-xl text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-500/20 active:scale-95 transition-all">儲存任務</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // 全域變數狀態
+        let tasks = [];
+        let currentFilter = 'all'; // 'all', 'active', 'completed'
+
+        // 頁面載入初始化
+        window.onload = function () {
+            initTheme();
+            loadTasksFromLocalStorage();
+            renderTasks();
+        };
+
+        // --- 主題模式 (Dark / Light) 控制 ---
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+                document.getElementById('themeIcon').className = 'fa-solid fa-sun text-lg text-amber-400';
+            } else {
+                document.documentElement.classList.remove('dark');
+                document.getElementById('themeIcon').className = 'fa-solid fa-moon text-lg';
+            }
+        }
+
+        function toggleDarkMode() {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            document.getElementById('themeIcon').className = isDark ? 'fa-solid fa-sun text-lg text-amber-400' : 'fa-solid fa-moon text-lg';
+        }
+
+        // --- LocalStorage 資料寫入與讀取 ---
+        function loadTasksFromLocalStorage() {
+            try {
+                const stored = localStorage.getItem('task_flow_data');
+                if (stored) {
+                    tasks = JSON.parse(stored);
+                    // 清理舊有的測試範例資料
+                    tasks = tasks.filter(t => t.id !== '1' && t.id !== '2');
+                } else {
+                    tasks = [];
+                }
+                saveTasksToLocalStorage();
+            } catch (e) {
+                console.error("無法讀取 LocalStorage", e);
+                tasks = [];
+            }
+        }
+
+        function saveTasksToLocalStorage() {
+            localStorage.setItem('task_flow_data', JSON.stringify(tasks));
+        }
+
+        // --- 日期狀態輔助函式 ---
+        function getDateStatus(dueDateStr, dueTimeStr, isCompleted) {
+            if (!dueDateStr) return { status: 'none', label: '', badgeClass: '' };
+
+            const now = new Date();
+            // 組合 Date 物件
+            let dueDateTime;
+            if (dueTimeStr) {
+                dueDateTime = new Date(`${dueDateStr}T${dueTimeStr}`);
+            } else {
+                // 若無指定時間，預設為該日的 23:59:59
+                dueDateTime = new Date(`${dueDateStr}T23:59:59`);
+            }
+
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+
+            // 若已完成，簡單顯示原日期
+            if (isCompleted) {
+                return { status: 'normal', label: '', badgeClass: '' };
+            }
+
+            if (dueDateTime < now) {
+                return {
+                    status: 'overdue',
+                    label: '🚨 已逾期',
+                    badgeClass: 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400 border border-red-200 dark:border-red-800'
+                };
+            } else if (dueDateTime >= todayStart && dueDateTime <= todayEnd) {
+                return {
+                    status: 'today',
+                    label: '☀️ 今天到期',
+                    badgeClass: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800 font-semibold'
+                };
+            } else {
+                // 檢查是否在 3 天內 (即將到期)
+                const threeDaysLater = new Date(now);
+                threeDaysLater.setDate(threeDaysLater.getDate() + 3);
+
+                if (dueDateTime <= threeDaysLater) {
+                    return {
+                        status: 'upcoming',
+                        label: '⏳ 即將到期',
+                        badgeClass: 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
+                    };
+                }
+            }
+
+            return { status: 'normal', label: '', badgeClass: '' };
+        }
+
+        function renderTasks() {
+            const taskList = document.getElementById('taskList');
+            const emptyState = document.getElementById('emptyState');
+            const searchValue = document.getElementById('searchInput').value.toLowerCase().trim();
+            const dateStatusVal = document.getElementById('dateStatusFilter').value;
+            const priorityVal = document.getElementById('priorityFilter').value;
+            const categoryVal = document.getElementById('categoryFilter').value;
+            const sortBy = document.getElementById('sortBy').value;
+
+            // 1. 綜合篩選邏輯
+            let filtered = tasks.filter(task => {
+                // 狀態篩選 (全部/進行中/已完成)
+                if (currentFilter === 'active' && task.completed) return false;
+                if (currentFilter === 'completed' && !task.completed) return false;
+
+                // 搜尋關鍵字
+                if (searchValue && !task.title.toLowerCase().includes(searchValue) && !task.desc.toLowerCase().includes(searchValue)) {
+                    return false;
+                }
+
+                // 日期狀態篩選
+                if (dateStatusVal !== 'all') {
+                    const dateInfo = getDateStatus(task.dueDate, task.dueTime, task.completed);
+                    if (dateStatusVal === 'none' && task.dueDate) return false;
+                    if (dateStatusVal !== 'none' && dateInfo.status !== dateStatusVal) return false;
+                }
+
+                // 優先級
+                if (priorityVal !== 'all' && task.priority !== priorityVal) return false;
+
+                // 分類
+                if (categoryVal !== 'all' && task.category !== categoryVal) return false;
+
+                return true;
+            });
+
+            // 2. 排序邏輯
+            filtered.sort((a, b) => {
+                if (sortBy === 'createdAt-desc') return new Date(b.createdAt) - new Date(a.createdAt);
+                if (sortBy === 'createdAt-asc') return new Date(a.createdAt) - new Date(b.createdAt);
+                
+                // 依截止日期排序
+                if (sortBy === 'dueDate-asc') {
+                    if (!a.dueDate) return 1;
+                    if (!b.dueDate) return -1;
+                    const timeA = new Date(`${a.dueDate}T${a.dueTime || '23:59:59'}`).getTime();
+                    const timeB = new Date(`${b.dueDate}T${b.dueTime || '23:59:59'}`).getTime();
+                    return timeA - timeB;
+                }
+                if (sortBy === 'dueDate-desc') {
+                    if (!a.dueDate) return 1;
+                    if (!b.dueDate) return -1;
+                    const timeA = new Date(`${a.dueDate}T${a.dueTime || '23:59:59'}`).getTime();
+                    const timeB = new Date(`${b.dueDate}T${b.dueTime || '23:59:59'}`).getTime();
+                    return timeB - timeA;
+                }
+
+                if (sortBy === 'priority-desc') {
+                    const weight = { high: 3, medium: 2, low: 1 };
+                    return weight[b.priority] - weight[a.priority];
+                }
+                return 0;
+            });
+
+            // 3. 更新數據頁頭
+            updateStats();
+
+            // 4. 清空並動態繪製清單
+            taskList.innerHTML = '';
+
+            if (filtered.length === 0) {
+                emptyState.classList.remove('hidden');
+                emptyState.classList.add('flex');
+            } else {
+                emptyState.classList.add('hidden');
+                emptyState.classList.remove('flex');
+
+                filtered.forEach(task => {
+                    const card = createTaskCardHTML(task);
+                    taskList.appendChild(card);
+                });
+            }
+
+            // 更新頁籤 Tab 樣式
+            updateTabStyles();
+        }
+
+        function createTaskCardHTML(task) {
+            const div = document.createElement('div');
+            div.className = `group bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-all-custom flex items-start space-x-3.5 ${task.completed ? 'bg-slate-50/50 dark:bg-slate-800/50' : ''}`;
+
+            // 優先權標籤
+            const priorityBadge = {
+                high: '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400">高優先</span>',
+                medium: '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400">中優先</span>',
+                low: '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400">低優先</span>'
+            }[task.priority] || '';
+
+            // 計算與格式化日期
+            let dateDisplayHTML = '';
+            if (task.dueDate) {
+                const [year, month, day] = task.dueDate.split('-');
+                const formattedDateStr = `${year}/${month}/${day}`;
+                const timeStr = task.dueTime ? ` ${task.dueTime}` : '';
+
+                const dateInfo = getDateStatus(task.dueDate, task.dueTime, task.completed);
+
+                dateDisplayHTML = `
+                    <div class="inline-flex items-center space-x-1.5 text-xs">
+                        <span class="inline-flex items-center space-x-1 ${dateInfo.status === 'overdue' ? 'text-red-500 font-medium' : dateInfo.status === 'today' ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-slate-500 dark:text-slate-400'}">
+                            <i class="fa-regular fa-calendar-days"></i>
+                            <span>${formattedDateStr}${timeStr}</span>
+                        </span>
+                        ${dateInfo.label ? `<span class="px-2 py-0.5 rounded-md text-[10px] ${dateInfo.badgeClass}">${dateInfo.label}</span>` : ''}
+                    </div>
+                `;
+            }
+
+            div.innerHTML = `
+                <!-- 自訂 Checkbox -->
+                <label class="relative flex items-center justify-center cursor-pointer mt-0.5 flex-shrink-0">
+                    <input type="checkbox" ${task.completed ? 'checked' : ''} onchange="toggleTaskStatus('${task.id}')" class="sr-only task-checkbox">
+                    <div class="checkbox-custom w-5 h-5 rounded-lg border-2 border-slate-300 dark:border-slate-600 flex items-center justify-center transition-all duration-200">
+                        <i class="fa-solid fa-check text-white text-xs opacity-0 transform scale-50 transition-all duration-200"></i>
+                    </div>
+                </label>
+
+                <!-- 任務主要內容 -->
+                <div class="flex-1 min-w-0">
+                    <div class="flex flex-wrap items-center gap-1.5 mb-1">
+                        <span class="font-medium text-sm text-slate-800 dark:text-slate-100 ${task.completed ? 'completed-text' : ''} break-all">
+                            ${escapeHTML(task.title)}
+                        </span>
+                        ${priorityBadge}
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                            ${escapeHTML(task.category)}
+                        </span>
+                    </div>
+
+                    ${task.desc ? `<p class="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mb-2 ${task.completed ? 'completed-text' : ''}">${escapeHTML(task.desc)}</p>` : ''}
+
+                    <div class="mt-1">
+                        ${dateDisplayHTML}
+                    </div>
+                </div>
+
+                <!-- 操作按鈕區 -->
+                <div class="flex items-center space-x-1 opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onclick="openEditModal('${task.id}')" class="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg transition-colors" title="編輯">
+                        <i class="fa-regular fa-pen-to-square text-sm"></i>
+                    </button>
+                    <button onclick="deleteTask('${task.id}')" class="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition-colors" title="刪除">
+                        <i class="fa-regular fa-trash-can text-sm"></i>
+                    </button>
+                </div>
+            `;
+
+            return div;
+        }
+
+        function toggleTaskStatus(id) {
+            tasks = tasks.map(t => {
+                if (t.id === id) {
+                    return { ...t, completed: !t.completed };
+                }
+                return t;
+            });
+            saveTasksToLocalStorage();
+            renderTasks();
+        }
+
+        function deleteTask(id) {
+            tasks = tasks.filter(t => t.id !== id);
+            saveTasksToLocalStorage();
+            renderTasks();
+        }
+
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            const id = document.getElementById('taskId').value;
+            const title = document.getElementById('taskTitle').value.trim();
+            const desc = document.getElementById('taskDesc').value.trim();
+            const priority = document.getElementById('taskPriority').value;
+            const category = document.getElementById('taskCategory').value;
+            const dueDate = document.getElementById('taskDueDate').value;
+            const dueTime = document.getElementById('taskDueTime').value;
+
+            if (!title) return;
+
+            if (id) {
+                // 編輯任務
+                tasks = tasks.map(t => {
+                    if (t.id === id) {
+                        return { ...t, title, desc, priority, category, dueDate, dueTime };
+                    }
+                    return t;
+                });
+            } else {
+                // 新增任務
+                const newTask = {
+                    id: Date.now().toString(),
+                    title,
+                    desc,
+                    priority,
+                    category,
+                    dueDate,
+                    dueTime,
+                    completed: false,
+                    createdAt: new Date().toISOString()
+                };
+                tasks.unshift(newTask);
+            }
+
+            saveTasksToLocalStorage();
+            renderTasks();
+            closeModal();
+        }
+
+        function openModal() {
+            document.getElementById('taskForm').reset();
+            document.getElementById('taskId').value = '';
+            document.getElementById('modalTitle').innerText = '新增待辦事項';
+            
+            const modal = document.getElementById('taskModal');
+            const container = document.getElementById('modalContainer');
+            
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            container.classList.remove('scale-95');
+            container.classList.add('scale-100');
+        }
+
+        function openEditModal(id) {
+            const task = tasks.find(t => t.id === id);
+            if (!task) return;
+
+            document.getElementById('taskId').value = task.id;
+            document.getElementById('taskTitle').value = task.title;
+            document.getElementById('taskDesc').value = task.desc || '';
+            document.getElementById('taskPriority').value = task.priority;
+            document.getElementById('taskCategory').value = task.category;
+            document.getElementById('taskDueDate').value = task.dueDate || '';
+            document.getElementById('taskDueTime').value = task.dueTime || '';
+
+            document.getElementById('modalTitle').innerText = '編輯待辦事項';
+
+            const modal = document.getElementById('taskModal');
+            const container = document.getElementById('modalContainer');
+            
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            container.classList.remove('scale-95');
+            container.classList.add('scale-100');
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('taskModal');
+            const container = document.getElementById('modalContainer');
+            
+            container.classList.remove('scale-100');
+            container.classList.add('scale-95');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+        }
+
+        function setFilter(filter) {
+            currentFilter = filter;
+            renderTasks();
+        }
+
+        function updateTabStyles() {
+            const tabs = ['all', 'active', 'completed'];
+            tabs.forEach(tab => {
+                const btn = document.getElementById(`filter-${tab}`);
+                if (tab === currentFilter) {
+                    btn.className = "filter-tab flex-1 md:flex-none px-4 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm transition-all";
+                } else {
+                    btn.className = "filter-tab flex-1 md:flex-none px-4 py-1.5 rounded-lg text-xs font-medium transition-all text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200";
+                }
+            });
+        }
+
+        function updateStats() {
+            const total = tasks.length;
+            const completed = tasks.filter(t => t.completed).length;
+            const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
+
+            document.getElementById('totalCount').innerText = total;
+            document.getElementById('completedCount').innerText = completed;
+            document.getElementById('progressBar').style.width = `${percent}%`;
+
+            const subtitle = document.getElementById('statsSubtitle');
+            if (total === 0) {
+                subtitle.innerText = '目前尚無任何任務';
+            } else if (percent === 100) {
+                subtitle.innerText = '🎉 太棒了！已完成所有事項！';
+            } else {
+                subtitle.innerText = `已完成 ${percent}% 的目標，繼續保持！`;
+            }
+        }
+
+        function escapeHTML(str) {
+            if (!str) return '';
+            return str.replace(/[&<>"']/g, function (match) {
+                return {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#39;'
+                }[match];
+            });
+        }
+    </script>
+</body>
+</html>
